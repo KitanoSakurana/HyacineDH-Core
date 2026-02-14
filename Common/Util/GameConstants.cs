@@ -28,6 +28,7 @@ public static class GameConstants
     public static uint CHALLENGE_PEAK_SILVER_FRAME_ID { get; private set; } = 226002;
     public static uint CHALLENGE_PEAK_GOLD_FRAME_ID { get; private set; } = 226003;
     public static uint CHALLENGE_PEAK_ULTRA_FRAME_ID { get; private set; } = 226004;
+    public static uint CHALLENGE_PEAK_SELECTED_GROUP_ID { get; private set; } = 0;
 
     public static uint CHALLENGE_PEAK_CUR_GROUP_ID { get; private set; } = 1;
     public static Dictionary<uint, List<uint>> CHALLENGE_PEAK_TARGET_ENTRY_ID { get; private set; } =
@@ -51,40 +52,11 @@ public static class GameConstants
     {
         if (option == null)
         {
-            CHALLENGE_PEAK_BRONZE_FRAME_ID = 226001;
-            CHALLENGE_PEAK_SILVER_FRAME_ID = 226002;
-            CHALLENGE_PEAK_GOLD_FRAME_ID = 226003;
-            CHALLENGE_PEAK_ULTRA_FRAME_ID = 226004;
-            CHALLENGE_PEAK_CUR_GROUP_ID = 1;
-            CHALLENGE_PEAK_TARGET_ENTRY_ID = CreateDefaultChallengePeakTargetEntries();
+            CHALLENGE_PEAK_SELECTED_GROUP_ID = 0;
             return;
         }
 
-        CHALLENGE_PEAK_BRONZE_FRAME_ID = option.BronzeFrameId > 0 ? option.BronzeFrameId : 226001;
-        CHALLENGE_PEAK_SILVER_FRAME_ID = option.SilverFrameId > 0 ? option.SilverFrameId : 226002;
-        CHALLENGE_PEAK_GOLD_FRAME_ID = option.GoldFrameId > 0 ? option.GoldFrameId : 226003;
-        CHALLENGE_PEAK_ULTRA_FRAME_ID = option.UltraFrameId > 0 ? option.UltraFrameId : 226004;
-        CHALLENGE_PEAK_CUR_GROUP_ID = option.CurrentGroupId > 0 ? option.CurrentGroupId : 1;
-
-        var targetEntryByGroup = new Dictionary<uint, List<uint>>();
-        var sourceMap = option.TargetEntryByGroup ?? CreateDefaultChallengePeakTargetEntries();
-        foreach (var kv in sourceMap)
-        {
-            if (kv.Key == 0 || kv.Value.Count < 2) continue;
-
-            var entryId = kv.Value[0];
-            var mazeGroupId = kv.Value[1];
-            if (entryId == 0 || mazeGroupId == 0) continue;
-
-            targetEntryByGroup[kv.Key] = [entryId, mazeGroupId];
-        }
-
-        CHALLENGE_PEAK_TARGET_ENTRY_ID = targetEntryByGroup.Count > 0
-            ? targetEntryByGroup
-            : CreateDefaultChallengePeakTargetEntries();
-
-        if (!CHALLENGE_PEAK_TARGET_ENTRY_ID.ContainsKey(CHALLENGE_PEAK_CUR_GROUP_ID))
-            CHALLENGE_PEAK_CUR_GROUP_ID = CHALLENGE_PEAK_TARGET_ENTRY_ID.Keys.Min();
+        CHALLENGE_PEAK_SELECTED_GROUP_ID = option.SelectedGroupId is >= 1 and <= 4 ? option.SelectedGroupId : 0;
     }
 
     public static void RefreshChallengePeakTargetEntriesFromResource()

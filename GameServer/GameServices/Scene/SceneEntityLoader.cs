@@ -237,7 +237,7 @@ public class SceneEntityLoader(SceneInstance scene)
         return entities;
     }
 
-    public virtual async ValueTask UnloadGroup(int groupId)
+    public virtual async ValueTask UnloadGroup(int groupId, bool sendPacket = true)
     {
         var group = Scene.FloorInfo?.Groups.TryGetValue(groupId, out var v1) == true ? v1 : null;
         if (group == null) return;
@@ -255,7 +255,7 @@ public class SceneEntityLoader(SceneInstance scene)
 
         Scene.Groups.Remove(group.Id);
 
-        if (refreshed)
+        if (refreshed && sendPacket)
             await Scene.Player.SendPacket(new PacketSceneGroupRefreshScNotify(Scene.Player, removeEntity: removeList));
     }
 

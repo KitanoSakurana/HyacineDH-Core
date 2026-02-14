@@ -10,6 +10,7 @@ public abstract class BaseLegacyChallengeInstance(PlayerInstance player, Challen
     : BaseChallengeInstance(player, data)
 {
     public bool IsWin { get; set; }
+    public bool IsPartialChallenge { get; set; }
     public abstract ChallengeConfigExcel Config { get; }
     public abstract CurChallenge ToProto();
 

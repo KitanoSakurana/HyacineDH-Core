@@ -24,9 +24,12 @@ public class ChallengePeakInstance(PlayerInstance player, ChallengeDataPb data) 
 
         Dictionary<int, List<ChallengeConfigExcel.ChallengeMonsterInfo>> monsters = [];
 
-        var mazeGroupId = GameConstants.ResolveChallengePeakStartGroupId(
-            (int)Data.Peak.CurrentPeakGroupId,
-            Data.Peak.IsHard);
+        var mazeGroupId = Config.MazeGroupID;
+        if (mazeGroupId <= 0)
+            mazeGroupId = GameConstants.ResolveChallengePeakStartGroupId(
+                (int)Data.Peak.CurrentPeakGroupId,
+                Data.Peak.IsHard);
+
         if (mazeGroupId <= 0) return Config.ChallengeMonsters;
         monsters.Add(mazeGroupId, []);
 
@@ -34,6 +37,8 @@ public class ChallengePeakInstance(PlayerInstance player, ChallengeDataPb data) 
         var curConfId = 200000;
         foreach (var eventId in Config.BossExcel.HardEventIDList)
         {
+            if (eventId <= 0) continue;
+
             // get from stage id
             if (!GameData.StageConfigData.TryGetValue(eventId, out var stage)) continue;
 

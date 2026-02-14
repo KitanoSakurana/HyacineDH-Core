@@ -1,4 +1,5 @@
 using HyacineCore.Server.Data;
+using HyacineCore.Server.Data.Excel;
 using HyacineCore.Server.Database.Challenge;
 using HyacineCore.Server.Database.Lineup;
 using HyacineCore.Server.GameServer.Game.Challenge.Instances;
@@ -17,6 +18,10 @@ public class ChallengePeakManager(PlayerInstance player) : BasePlayerManager(pla
 
     public uint GetCurrentPeakGroupId()
     {
+        if (GameConstants.CHALLENGE_PEAK_SELECTED_GROUP_ID > 0 &&
+            GameData.ChallengePeakGroupConfigData.ContainsKey((int)GameConstants.CHALLENGE_PEAK_SELECTED_GROUP_ID))
+            return GameConstants.CHALLENGE_PEAK_SELECTED_GROUP_ID;
+
         if (Player.ChallengeManager?.ChallengeInstance is ChallengePeakInstance peakInstance &&
             peakInstance.Data.Peak.CurrentPeakGroupId > 0)
             return peakInstance.Data.Peak.CurrentPeakGroupId;
@@ -102,6 +107,10 @@ public class ChallengePeakManager(PlayerInstance player) : BasePlayerManager(pla
 
     public async ValueTask SaveHistory(ChallengePeakInstance inst, List<uint> targetIds)
     {
+        var currentLineup = Player.LineupManager!.GetCurLineup();
+        Player.LineupManager.SanitizeLineup(currentLineup);
+        var currentAvatarIds = currentLineup?.BaseAvatars?.Select(x => (uint)x.BaseAvatarId).ToList() ?? [];
+
         if (inst.Config.BossExcel != null)
         {
             // is hard
@@ -119,8 +128,7 @@ public class ChallengePeakManager(PlayerInstance player) : BasePlayerManager(pla
             {
                 LevelId = (int)inst.Data.Peak.CurrentPeakLevelId,
                 IsHard = isHard,
-                BaseAvatarList = Player.LineupManager!.GetCurLineup()?.BaseAvatars?.Select(x => (uint)x.BaseAvatarId)
-                    .ToList() ?? [],
+                BaseAvatarList = currentAvatarIds,
                 RoundCnt = inst.Data.Peak.RoundCnt,
                 BuffId = inst.Data.Peak.Buffs.FirstOrDefault(),
                 FinishedTargetList = targetIds,
@@ -155,8 +163,7 @@ public class ChallengePeakManager(PlayerInstance player) : BasePlayerManager(pla
             var data = new ChallengePeakLevelData
             {
                 LevelId = levelId,
-                BaseAvatarList = Player.LineupManager!.GetCurLineup()?.BaseAvatars?.Select(x => (uint)x.BaseAvatarId)
-                    .ToList() ?? [],
+                BaseAvatarList = currentAvatarIds,
                 RoundCnt = inst.Data.Peak.RoundCnt,
                 FinishedTargetList = targetIds,
                 PeakStar = (uint)targetIds.Count
@@ -185,57 +192,56 @@ public class ChallengePeakManager(PlayerInstance player) : BasePlayerManager(pla
         var isBossLevel = groupExcel?.BossLevelID == levelId;
 
         // Format to base avatar id
-        List<int> avatarIds = [];
-        foreach (var avatarId in avatarIdList)
-        {
-            var avatar = Player.AvatarManager!.GetFormalAvatar(avatarId);
-            if (avatar != null)
-                avatarIds.Add(avatar.BaseAvatarId);
-        }
+        var avatarIds = Player.LineupManager!.BuildValidLineup(avatarIdList).Select(x => x.BaseAvatarId).ToList();
 
         // Get lineup
-        var lineup = Player.LineupManager!.GetExtraLineup(ExtraLineupType.LineupChallenge)!;
+        var lineup = Player.LineupManager!.GetExtraLineup(ExtraLineupType.LineupChallenge);
+        if (lineup == null)
+        {
+            Player.LineupManager.SetExtraLineup(ExtraLineupType.LineupChallenge, []);
+            lineup = Player.LineupManager.GetExtraLineup(ExtraLineupType.LineupChallenge);
+        }
+
+        if (lineup == null)
+        {
+            await Player.SendPacket(new PacketStartChallengePeakScRsp(Retcode.RetChallengeNotExist));
+            return;
+        }
+
         if (avatarIds.Count > 0)
         {
-            lineup.BaseAvatars = avatarIds.Select(x => new LineupAvatarInfo
-            {
-                BaseAvatarId = x
-            }).ToList();
+            lineup.BaseAvatars = Player.LineupManager.BuildValidLineup(avatarIds);
         }
         else
         {
+            List<int> rememberedAvatarIds;
             if (isBossLevel)
             {
                 var bossHistoryKey = (levelId << 2) | (BossIsHard ? 1 : 0);
-                lineup.BaseAvatars = Player.ChallengeManager!.ChallengeData.PeakBossLevelDatas
+                rememberedAvatarIds = Player.ChallengeManager!.ChallengeData.PeakBossLevelDatas
                     .GetValueOrDefault(bossHistoryKey)?.BaseAvatarList
-                    .Select(x => new LineupAvatarInfo
-                    {
-                        BaseAvatarId = (int)x
-                    }).ToList() ?? [];
+                    .Select(x => (int)x).ToList() ?? [];
             }
             else
             {
-                lineup.BaseAvatars = Player.ChallengeManager!.ChallengeData.PeakLevelDatas.GetValueOrDefault(levelId)
+                rememberedAvatarIds = Player.ChallengeManager!.ChallengeData.PeakLevelDatas.GetValueOrDefault(levelId)
                     ?.BaseAvatarList
-                    .Select(x => new LineupAvatarInfo
-                    {
-                        BaseAvatarId = (int)x
-                    }).ToList() ?? [];
+                    .Select(x => (int)x).ToList() ?? [];
             }
+
+            lineup.BaseAvatars = Player.LineupManager.BuildValidLineup(rememberedAvatarIds);
         }
 
         if (lineup.BaseAvatars.Count == 0)
-            lineup.BaseAvatars = Player.AvatarManager!.AvatarData.FormalAvatars
-                .Take(4)
-                .Select(x => new LineupAvatarInfo
-                {
-                    BaseAvatarId = x.BaseAvatarId
-                }).ToList() ?? [];
+            lineup.BaseAvatars = Player.LineupManager.BuildValidLineup(
+                Player.AvatarManager!.AvatarData.FormalAvatars.Select(x => x.BaseAvatarId));
+
+        Player.LineupManager.SanitizeLineup(lineup);
+        lineup.LeaderAvatarId = lineup.BaseAvatars.FirstOrDefault()?.BaseAvatarId ?? 0;
         
 
         // Set technique points to full
-        lineup.Mp = 8; // Max Mp
+        lineup.Mp = Player.LineupManager.GetMaxMp();
 
         // Make sure this lineup has avatars set
         if (lineup.BaseAvatars.Count == 0)
@@ -244,11 +250,18 @@ public class ChallengePeakManager(PlayerInstance player) : BasePlayerManager(pla
             return;
         }
 
-        // Reset hp/sp
-        foreach (var avatar in Player.AvatarManager!.AvatarData.FormalAvatars)
+        var lineupAvatars = Player.LineupManager.GetAvatarsFromTeam((int)ExtraLineupType.LineupChallenge + 10);
+        if (lineupAvatars.Count == 0)
         {
-            avatar.SetCurHp(10000, true);
-            avatar.SetCurSp(5000, true);
+            await Player.SendPacket(new PacketStartChallengePeakScRsp(Retcode.RetChallengeLineupEmpty));
+            return;
+        }
+
+        // Reset hp/sp for current challenge lineup only
+        foreach (var avatar in lineupAvatars)
+        {
+            avatar.AvatarInfo.SetCurHp(10000, true);
+            avatar.AvatarInfo.SetCurSp(5000, true);
         }
 
         // Set challenge data for player
@@ -278,18 +291,28 @@ public class ChallengePeakManager(PlayerInstance player) : BasePlayerManager(pla
         // Enter scene
         try
         {
-            var targetEntryId = groupExcel switch
+            var targetEntryId = ResolvePeakEntryId(excel, groupExcel, data.Peak.IsHard);
+            if (targetEntryId <= 0 || !GameData.MapEntranceData.ContainsKey(targetEntryId))
             {
-                not null when data.Peak.IsHard && groupExcel.MapEntranceBoss > 0 => groupExcel.MapEntranceBoss,
-                not null when groupExcel.MapEntranceID > 0 => groupExcel.MapEntranceID,
-                _ => GameConstants.ResolveChallengePeakEntryId(groupId, data.Peak.IsHard)
-            };
+                await Player.LineupManager.SetExtraLineup(ExtraLineupType.LineupNone, false);
+                Player.ChallengeManager!.ChallengeInstance = null;
+                await Player.SendPacket(new PacketStartChallengePeakScRsp(Retcode.RetChallengeNotExist));
+                return;
+            }
 
-            await Player.EnterScene(targetEntryId, 0, true);
+            var changed = await Player.EnterScene(targetEntryId, 0, true);
+            if (!changed && Player.Data.EntryId != targetEntryId)
+            {
+                await Player.LineupManager.SetExtraLineup(ExtraLineupType.LineupNone, false);
+                Player.ChallengeManager!.ChallengeInstance = null;
+                await Player.SendPacket(new PacketStartChallengePeakScRsp(Retcode.RetChallengeNotExist));
+                return;
+            }
         }
         catch
         {
             // Reset lineup/instance if entering scene failed
+            await Player.LineupManager.SetExtraLineup(ExtraLineupType.LineupNone, false);
             Player.ChallengeManager!.ChallengeInstance = null;
 
             // Send error packet
@@ -307,6 +330,23 @@ public class ChallengePeakManager(PlayerInstance player) : BasePlayerManager(pla
 
         // Save instance
         Player.ChallengeManager!.SaveInstance(instance);
+    }
+
+    private static int ResolvePeakEntryId(ChallengePeakConfigExcel peakExcel, ChallengePeakGroupConfigExcel? groupExcel,
+        bool isHardMode)
+    {
+        // Prefer level config from ChallengePeakConfig.json.
+        if (peakExcel.MapEntranceID > 0) return peakExcel.MapEntranceID;
+
+        // Keep compatibility with group-level configs when provided.
+        if (groupExcel != null)
+        {
+            if (isHardMode && groupExcel.MapEntranceBoss > 0) return groupExcel.MapEntranceBoss;
+            if (groupExcel.MapEntranceID > 0) return groupExcel.MapEntranceID;
+            return GameConstants.ResolveChallengePeakEntryId(groupExcel.ID, isHardMode);
+        }
+
+        return 0;
     }
 
     private bool HasGroupProgress(int groupId)

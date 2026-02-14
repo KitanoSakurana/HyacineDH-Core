@@ -9,17 +9,18 @@ public class CommandAccount : ICommand
     [CommandMethod("create")]
     public async ValueTask CreateAccount(CommandArg arg)
     {
-        if (arg.Args.Count < 2)
+        var args = arg.GetMethodArgs("create");
+        if (args.Count < 1)
         {
             await arg.SendMsg(I18NManager.Translate("Game.Command.Notice.InvalidArguments"));
             return;
         }
 
-        var account = arg.Args[1];
+        var account = args[0];
         var uid = 0;
 
-        if (arg.Args.Count > 2)
-            if (!int.TryParse(arg.Args[2], out uid))
+        if (args.Count > 1)
+            if (!int.TryParse(args[1], out uid))
             {
                 await arg.SendMsg(I18NManager.Translate("Game.Command.Account.InvalidUid"));
                 return;

@@ -52,6 +52,10 @@ public class ResourceManager
         GameData.SceneRainbowGroupPropertyData =
             LoadCustomFile<SceneRainbowGroupPropertyConfig>("Scene Rainbow Group Property",
                 "SceneRainbowGroupProperty") ?? new SceneRainbowGroupPropertyConfig();
+        GameData.ChallengePeakOverrideConfig =
+            LoadCustomFile<ChallengePeakOverrideConfig>("ChallengePeak", "ChallengePeak") ??
+            new ChallengePeakOverrideConfig();
+        ApplyChallengePeakOverrideConfig(GameData.ChallengePeakOverrideConfig);
 
         Task.WaitAll(loadTasks.ToArray());
 
@@ -403,12 +407,52 @@ public class ResourceManager
                 Logger.Info(I18NManager.Translate("Server.ServerInfo.LoadedItems", c.FloorProperty.Count.ToString(),
                     filetype));
                 break;
+            case ChallengePeakOverrideConfig c:
+                Logger.Info(I18NManager.Translate("Server.ServerInfo.LoadedItems", c.ChallengePeak.Count.ToString(),
+                    filetype));
+                break;
             default:
                 Logger.Info(I18NManager.Translate("Server.ServerInfo.LoadedItem", filetype));
                 break;
         }
 
         return customFile;
+    }
+
+    private static void ApplyChallengePeakOverrideConfig(ChallengePeakOverrideConfig? config)
+    {
+        if (config?.ChallengePeak == null || config.ChallengePeak.Count == 0) return;
+
+        foreach (var group in config.ChallengePeak)
+        {
+            if (group.Stages == null || group.Stages.Count == 0) continue;
+
+            foreach (var (stageKey, stageOverride) in group.Stages)
+            {
+                if (!int.TryParse(stageKey, out var stageId)) continue;
+                if (!GameData.ChallengePeakConfigData.TryGetValue(stageId, out var peakConfig)) continue;
+
+                if (stageOverride.MapEntranceId > 0)
+                    peakConfig.MapEntranceID = stageOverride.MapEntranceId;
+
+                if (stageOverride.MazeGroupId > 0)
+                    peakConfig.MazeGroupID = stageOverride.MazeGroupId;
+
+                var npcMonsterId = stageOverride.NpcMonsterId > 0
+                    ? stageOverride.NpcMonsterId
+                    : group.NpcMonsterIdDefault;
+                if (npcMonsterId > 0)
+                {
+                    if (peakConfig.EventIDList.Count > 0)
+                        peakConfig.NpcMonsterIDList = Enumerable.Repeat(npcMonsterId, peakConfig.EventIDList.Count)
+                            .ToList();
+                    else
+                        peakConfig.NpcMonsterIDList = [npcMonsterId];
+                }
+
+                peakConfig.RebuildChallengeMonsters();
+            }
+        }
     }
 
     public static void LoadMazeSkill()

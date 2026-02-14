@@ -79,6 +79,32 @@ public class CommandArg
         return res;
     }
 
+    public List<string> GetMethodBasicArgs(string methodName)
+    {
+        if (BasicArgs.Count > 0 && BasicArgs[0].Equals(methodName, StringComparison.OrdinalIgnoreCase))
+            return [.. BasicArgs.Skip(1)];
+
+        return [.. BasicArgs];
+    }
+
+    public List<string> GetMethodArgs(string methodName)
+    {
+        if (Args.Count > 0 && Args[0].Equals(methodName, StringComparison.OrdinalIgnoreCase))
+            return [.. Args.Skip(1)];
+
+        return [.. Args];
+    }
+
+    public int GetMethodInt(string methodName, int index)
+    {
+        var args = GetMethodBasicArgs(methodName);
+        if (args.Count <= index)
+            return 0;
+
+        _ = int.TryParse(args[index], out var res);
+        return res;
+    }
+
     public async ValueTask SendMsg(string msg)
     {
         await Sender.SendMsg(msg);

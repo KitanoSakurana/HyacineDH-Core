@@ -51,10 +51,20 @@ public class CommandScene : ICommand
             return;
         }
 
+        var basicArgs = arg.GetMethodBasicArgs("prop");
+        if (basicArgs.Count < 3 ||
+            !int.TryParse(basicArgs[0], out var groupId) ||
+            !int.TryParse(basicArgs[1], out var propId) ||
+            !int.TryParse(basicArgs[2], out var propState))
+        {
+            await arg.SendMsg(I18NManager.Translate("Game.Command.Notice.InvalidArguments"));
+            return;
+        }
+
         var scene = arg.Target!.Player!.SceneInstance!;
         EntityProp? prop = null;
-        foreach (var entity in scene.GetEntitiesInGroup<EntityProp>(arg.GetInt(0)))
-            if (entity.PropInfo?.ID == arg.GetInt(1))
+        foreach (var entity in scene.GetEntitiesInGroup<EntityProp>(groupId))
+            if (entity.PropInfo?.ID == propId)
             {
                 prop = entity;
                 break;
@@ -66,9 +76,9 @@ public class CommandScene : ICommand
             return;
         }
 
-        await prop.SetState((PropStateEnum)arg.GetInt(2));
-        var propId = prop.PropInfo?.ID ?? 0;
-        await arg.SendMsg(I18NManager.Translate("Game.Command.Scene.PropStateChanged", propId.ToString(),
+        await prop.SetState((PropStateEnum)propState);
+        var changedPropId = prop.PropInfo?.ID ?? 0;
+        await arg.SendMsg(I18NManager.Translate("Game.Command.Scene.PropStateChanged", changedPropId.ToString(),
             prop.State.ToString()));
     }
 
@@ -81,8 +91,15 @@ public class CommandScene : ICommand
             return;
         }
 
+        var basicArgs = arg.GetMethodBasicArgs("remove");
+        if (basicArgs.Count < 1 || !int.TryParse(basicArgs[0], out var entityId))
+        {
+            await arg.SendMsg(I18NManager.Translate("Game.Command.Notice.InvalidArguments"));
+            return;
+        }
+
         var scene = arg.Target!.Player!.SceneInstance!;
-        scene.Entities.TryGetValue(arg.GetInt(0), out var entity);
+        scene.Entities.TryGetValue(entityId, out var entity);
         if (entity == null)
         {
             await arg.SendMsg(I18NManager.Translate("Game.Command.Scene.EntityNotFound"));
@@ -158,15 +175,16 @@ public class CommandScene : ICommand
             return;
         }
 
-        if (arg.GetInt(0) == 0)
+        var entryId = arg.GetMethodInt("change", 0);
+        if (entryId == 0)
         {
             await arg.SendMsg(I18NManager.Translate("Game.Command.Notice.InvalidArguments"));
             return;
         }
 
         var player = arg.Target!.Player!;
-        await player.EnterScene(arg.GetInt(0), 0, true);
-        await arg.SendMsg(I18NManager.Translate("Game.Command.Scene.SceneChanged", arg.GetInt(0).ToString()));
+        await player.EnterScene(entryId, 0, true);
+        await arg.SendMsg(I18NManager.Translate("Game.Command.Scene.SceneChanged", entryId.ToString()));
     }
 
     [CommandMethod("0 reload")]
@@ -192,7 +210,7 @@ public class CommandScene : ICommand
             return;
         }
 
-        var floorId = arg.GetInt(0);
+        var floorId = arg.GetMethodInt("reset", 0);
         if (floorId == 0)
         {
             await arg.SendMsg(I18NManager.Translate("Game.Command.Notice.InvalidArguments"));
@@ -218,14 +236,14 @@ public class CommandScene : ICommand
             return;
         }
 
-        if (arg.Args.Count < 3)
+        var args = arg.GetMethodArgs("fsv");
+        if (args.Count < 2 || !int.TryParse(args[1], out var value))
         {
             await arg.SendMsg(I18NManager.Translate("Game.Command.Notice.InvalidArguments"));
             return;
         }
 
-        var name = arg.Args[1];
-        var value = int.Parse(arg.Args[2]);
+        var name = args[0];
 
         await arg.Target!.Player!.SceneInstance!.UpdateFloorSavedValue(name, value);
         await arg.SendMsg(I18NManager.Translate("Game.Command.Scene.FSVSet", name, value.ToString()));
@@ -240,15 +258,16 @@ public class CommandScene : ICommand
             return;
         }
 
-        if (arg.Args.Count < 4)
+        var args = arg.GetMethodArgs("gp");
+        if (args.Count < 3 ||
+            !int.TryParse(args[0], out var groupId) ||
+            !int.TryParse(args[2], out var value))
         {
             await arg.SendMsg(I18NManager.Translate("Game.Command.Notice.InvalidArguments"));
             return;
         }
 
-        var name = arg.Args[2];
-        var value = int.Parse(arg.Args[3]);
-        var groupId = int.Parse(arg.Args[1]);
+        var name = args[1];
 
         await arg.Target!.Player!.SceneInstance!.UpdateGroupProperty(groupId, name, value);
         await arg.SendMsg(I18NManager.Translate("Game.Command.Scene.FSVSet", name, value.ToString()));
@@ -308,13 +327,13 @@ public class CommandScene : ICommand
             return;
         }
 
-        if (arg.BasicArgs.Count == 0)
+        var basicArgs = arg.GetMethodBasicArgs("forward");
+        if (basicArgs.Count == 0 || !int.TryParse(basicArgs[0], out var distance))
         {
             await arg.SendMsg(I18NManager.Translate("Game.Command.Notice.InvalidArguments"));
             return;
         }
 
-        var distance = arg.GetInt(0);
         var player = arg.Target!.Player!;
 
         var posVec = new Vector3(player.Data.Pos!.X, player.Data.Pos!.Y, player.Data.Pos!.Z);

@@ -17,13 +17,14 @@ public class CommandDebug : ICommand
             return;
         }
 
-        if (arg.BasicArgs.Count == 0)
+        var basicArgs = arg.GetMethodBasicArgs("specific");
+        if (basicArgs.Count == 0)
         {
             await arg.SendMsg(I18NManager.Translate("Game.Command.Notice.InvalidArguments"));
             return;
         }
 
-        if (!int.TryParse(arg.BasicArgs[0], out var stageId))
+        if (!int.TryParse(basicArgs[0], out var stageId))
         {
             await arg.SendMsg(I18NManager.Translate("Game.Command.Notice.InvalidArguments"));
             return;
@@ -49,13 +50,14 @@ public class CommandDebug : ICommand
             return;
         }
 
-        if (arg.BasicArgs.Count == 0)
+        var basicArgs = arg.GetMethodBasicArgs("monster");
+        if (basicArgs.Count == 0)
         {
             await arg.SendMsg(I18NManager.Translate("Game.Command.Notice.InvalidArguments"));
             return;
         }
 
-        if (!int.TryParse(arg.BasicArgs[0], out var monsterId))
+        if (!int.TryParse(basicArgs[0], out var monsterId))
         {
             await arg.SendMsg(I18NManager.Translate("Game.Command.Notice.InvalidArguments"));
             return;
@@ -81,13 +83,14 @@ public class CommandDebug : ICommand
             return;
         }
 
-        if (arg.Args.Count < 2)
+        var args = arg.GetMethodArgs("customP");
+        if (args.Count < 1)
         {
             await arg.SendMsg(I18NManager.Translate("Game.Command.Notice.InvalidArguments"));
             return;
         }
 
-        var packetFilePath = arg.Args[1];
+        var packetFilePath = args[0];
         // Load custom packet queue from file
         if (!File.Exists(packetFilePath))
         {

@@ -19,15 +19,19 @@ public class CommandAvatar : ICommand
             return;
         }
 
-        if (arg.BasicArgs.Count < 2)
+        var basicArgs = NormalizeMethodArgs(arg, "talent");
+        if (basicArgs.Count < 2)
         {
             await arg.SendMsg(I18NManager.Translate("Game.Command.Notice.InvalidArguments"));
             return;
         }
 
-        // change basic type
-        var avatarId = arg.GetInt(0);
-        var level = arg.GetInt(1);
+        if (!int.TryParse(basicArgs[0], out var avatarId) || !TryGetLevelArg(arg, basicArgs, out var level))
+        {
+            await arg.SendMsg(I18NManager.Translate("Game.Command.Notice.InvalidArguments"));
+            return;
+        }
+
         if (level is < 0 or > 10)
         {
             await arg.SendMsg(I18NManager.Translate("Game.Command.Avatar.InvalidLevel",
@@ -99,9 +103,13 @@ public class CommandAvatar : ICommand
             return;
         }
 
-        if (arg.BasicArgs.Count < 1) await arg.SendMsg(I18NManager.Translate("Game.Command.Notice.InvalidArguments"));
+        var basicArgs = NormalizeMethodArgs(arg, "get");
+        if (basicArgs.Count < 1 || !int.TryParse(basicArgs[0], out var id))
+        {
+            await arg.SendMsg(I18NManager.Translate("Game.Command.Notice.InvalidArguments"));
+            return;
+        }
 
-        var id = arg.GetInt(0);
         var excel = await arg.Target.Player!.AvatarManager!.AddAvatar(id);
 
         if (excel == null)
@@ -122,10 +130,13 @@ public class CommandAvatar : ICommand
             return;
         }
 
-        if (arg.BasicArgs.Count < 2) await arg.SendMsg(I18NManager.Translate("Game.Command.Notice.InvalidArguments"));
+        var basicArgs = NormalizeMethodArgs(arg, "rank");
+        if (basicArgs.Count < 2 || !int.TryParse(basicArgs[0], out var id) || !int.TryParse(basicArgs[1], out var rank))
+        {
+            await arg.SendMsg(I18NManager.Translate("Game.Command.Notice.InvalidArguments"));
+            return;
+        }
 
-        var id = arg.GetInt(0);
-        var rank = arg.GetInt(1);
         if (rank is < 0 or > 6)
         {
             await arg.SendMsg(I18NManager.Translate("Game.Command.Avatar.InvalidLevel",
@@ -186,14 +197,13 @@ public class CommandAvatar : ICommand
             return;
         }
 
-        if (arg.BasicArgs.Count < 2)
+        var basicArgs = NormalizeMethodArgs(arg, "level");
+        if (basicArgs.Count < 2 || !int.TryParse(basicArgs[0], out var id) || !int.TryParse(basicArgs[1], out var level))
         {
             await arg.SendMsg(I18NManager.Translate("Game.Command.Notice.InvalidArguments"));
             return;
         }
 
-        var id = arg.GetInt(0);
-        var level = arg.GetInt(1);
         if (level is < 1 or > 80)
         {
             await arg.SendMsg(I18NManager.Translate("Game.Command.Avatar.InvalidLevel",
@@ -246,14 +256,13 @@ public class CommandAvatar : ICommand
             return;
         }
 
-        if (arg.BasicArgs.Count < 2)
+        var basicArgs = NormalizeMethodArgs(arg, "path");
+        if (basicArgs.Count < 2 || !int.TryParse(basicArgs[0], out var avatarId) ||
+            !int.TryParse(basicArgs[1], out var pathId))
         {
             await arg.SendMsg(I18NManager.Translate("Game.Command.Notice.InvalidArguments"));
             return;
         }
-
-        var avatarId = arg.GetInt(0);
-        var pathId = arg.GetInt(1);
 
         var avatar = arg.Target.Player!.AvatarManager!.GetFormalAvatar(avatarId);
         if (avatar == null)
@@ -273,5 +282,24 @@ public class CommandAvatar : ICommand
         await arg.Target.SendPacket(new PacketPlayerSyncScNotify(avatar));
 
         // arg.SendMsg(I18nManager.Translate("Game.Command.Avatar.AvatarLevelSet", avatar.Excel?.Name?.Replace("{NICKNAME}", arg.Target.Player!.Data.Name) ?? id.ToString(), I18nManager.Translate("Word.Avatar"), level.ToString()));
+    }
+
+    private static List<string> NormalizeMethodArgs(CommandArg arg, string methodName)
+    {
+        if (arg.BasicArgs.Count > 0 && arg.BasicArgs[0].Equals(methodName, StringComparison.OrdinalIgnoreCase))
+            return [.. arg.BasicArgs.Skip(1)];
+        return arg.BasicArgs;
+    }
+
+    private static bool TryGetLevelArg(CommandArg arg, List<string> basicArgs, out int level)
+    {
+        if (basicArgs.Count > 1 && int.TryParse(basicArgs[1], out level))
+            return true;
+
+        if (arg.CharacterArgs.TryGetValue("l", out var levelStr) && int.TryParse(levelStr, out level))
+            return true;
+
+        level = 0;
+        return false;
     }
 }

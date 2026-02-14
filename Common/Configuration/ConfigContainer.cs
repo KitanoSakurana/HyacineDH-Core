@@ -117,18 +117,8 @@ public class WelcomeMailReward
 
 public class ChallengePeakOption
 {
-    public uint BronzeFrameId { get; set; } = 226001;
-    public uint SilverFrameId { get; set; } = 226002;
-    public uint GoldFrameId { get; set; } = 226003;
-    public uint UltraFrameId { get; set; } = 226004;
-    public uint CurrentGroupId { get; set; } = 1;
-    public Dictionary<uint, List<uint>> TargetEntryByGroup { get; set; } = new()
-    {
-        {1, [3013501, 8]},
-        {2, [3013701, 10]},
-        {3, [3012302, 5]},
-        {4, [3014001, 7]}
-    };
+    // 0 = auto select by progress; 1~4 = force selected group.
+    public uint SelectedGroupId { get; set; } = 0;
 }
 
 public class ServerConfig

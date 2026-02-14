@@ -1,4 +1,5 @@
 using HyacineCore.Server.Data;
+using HyacineCore.Server.Data.Excel;
 using HyacineCore.Server.Database;
 using HyacineCore.Server.Database.Challenge;
 using HyacineCore.Server.Database.Friend;
@@ -7,6 +8,7 @@ using HyacineCore.Server.GameServer.Game.Challenge.Definitions;
 using HyacineCore.Server.GameServer.Game.Challenge.Instances;
 using HyacineCore.Server.GameServer.Game.Player;
 using HyacineCore.Server.GameServer.Server.Packet.Send.Challenge;
+using HyacineCore.Server.GameServer.Server.Packet.Send.Scene;
 using HyacineCore.Server.Proto;
 using HyacineCore.Server.Proto.ServerSide;
 using HyacineCore.Server.Util;
@@ -37,87 +39,26 @@ public class ChallengeManager(PlayerInstance player) : BasePlayerManager(player)
             return;
         }
 
-        if (excel.StageNum > 0)
+        if (excel.StageNum > 0 && !PrepareChallengeLineup(ExtraLineupType.LineupChallenge))
         {
-            var lineup = Player.LineupManager!.GetExtraLineup(ExtraLineupType.LineupChallenge)!;
-            if (lineup.AvatarData!.FormalAvatars.Count == 0)
-            {
-                await Player.SendPacket(new PacketStartChallengeScRsp((uint)Retcode.RetChallengeLineupEmpty));
-                return;
-            }
-
-            foreach (var avatar in lineup.AvatarData!.FormalAvatars)
-            {
-                avatar.SetCurHp(10000, true);
-                avatar.SetCurSp(5000, true);
-            }
-            lineup.Mp = 8;
+            await Player.SendPacket(new PacketStartChallengeScRsp((uint)Retcode.RetChallengeLineupEmpty));
+            return;
         }
 
-        if (excel.StageNum >= 2)
+        if (excel.StageNum >= 2 && !PrepareChallengeLineup(ExtraLineupType.LineupChallenge2))
         {
-            var lineup = Player.LineupManager!.GetExtraLineup(ExtraLineupType.LineupChallenge2)!;
-            if (lineup.AvatarData!.FormalAvatars.Count == 0)
-            {
-                await Player.SendPacket(new PacketStartChallengeScRsp((uint)Retcode.RetChallengeLineupEmpty));
-                return;
-            }
-
-            foreach (var avatar in lineup.AvatarData!.FormalAvatars)
-            {
-                avatar.SetCurHp(10000, true);
-                avatar.SetCurSp(5000, true);
-            }
-            lineup.Mp = 8;
+            await Player.SendPacket(new PacketStartChallengeScRsp((uint)Retcode.RetChallengeLineupEmpty));
+            return;
         }
 
-        var data = new ChallengeDataPb();
-        BaseLegacyChallengeInstance instance;
-
-        if (excel.IsBoss())
-        {
-            data.Boss = new ChallengeBossDataPb
-            {
-                ChallengeMazeId = (uint)excel.ID,
-                CurStatus = 1,
-                CurrentStage = 1,
-                CurrentExtraLineup = ChallengeLineupTypePb.Challenge1
-            };
-            instance = new ChallengeBossInstance(Player, data);
-        }
-        else if (excel.IsStory())
-        {
-            data.Story = new ChallengeStoryDataPb
-            {
-                ChallengeMazeId = (uint)excel.ID,
-                CurStatus = 1,
-                CurrentStage = 1,
-                CurrentExtraLineup = ChallengeLineupTypePb.Challenge1
-            };
-            instance = new ChallengeStoryInstance(Player, data);
-        }
-        else
-        {
-            data.Memory = new ChallengeMemoryDataPb
-            {
-                ChallengeMazeId = (uint)excel.ID,
-                CurStatus = 1,
-                CurrentStage = 1,
-                CurrentExtraLineup = ChallengeLineupTypePb.Challenge1,
-                RoundsLeft = (uint)excel.ChallengeCountDown
-            };
-            instance = new ChallengeMemoryInstance(Player, data);
-        }
+        var instance = CreateLegacyInstance(excel, 1, ExtraLineupType.LineupChallenge);
 
         ChallengeInstance = instance;
         await Player.LineupManager!.SetExtraLineup((ExtraLineupType)instance.GetCurrentExtraLineupType());
 
-        try
+        if (!await TryEnterChallengeScene(excel.MapEntranceID, false))
         {
-            await Player.EnterScene(excel.MapEntranceID, 0, true);
-        }
-        catch
-        {
+            await Player.LineupManager.SetExtraLineup(ExtraLineupType.LineupNone, false);
             ChallengeInstance = null;
             await Player.SendPacket(new PacketStartChallengeScRsp((uint)Retcode.RetChallengeNotExist));
             return;
@@ -155,13 +96,73 @@ public class ChallengeManager(PlayerInstance player) : BasePlayerManager(player)
         }
 
         InvokeOnPlayerEnterChallenge(Player, instance);
-        await Player.SendPacket(new PacketStartChallengeScRsp(Player));
+        // Order for client compatibility:
+        // 1) StartChallengeScRsp
+        // 2) EnterSceneByServerScNotify
+        await Player.SendPacket(new PacketStartChallengeScRsp(Player, sendScene: false));
+        await Player.SendPacket(new PacketEnterSceneByServerScNotify(Player.SceneInstance!));
+        SaveInstance(instance);
+    }
+
+    public async ValueTask StartPartialChallenge(int challengeId, uint buffId, bool isFirstHalf)
+    {
+        if (!GameData.ChallengeConfigData.TryGetValue(challengeId, out var excel))
+        {
+            await Player.SendPacket(new PacketStartPartialChallengeScRsp((uint)Retcode.RetChallengeNotExist));
+            return;
+        }
+
+        var lineupType = isFirstHalf ? ExtraLineupType.LineupChallenge : ExtraLineupType.LineupChallenge2;
+        if (!PrepareChallengeLineup(lineupType))
+        {
+            await Player.SendPacket(new PacketStartPartialChallengeScRsp((uint)Retcode.RetChallengeLineupEmpty));
+            return;
+        }
+
+        var currentStage = isFirstHalf ? 1 : 2;
+        var instance = CreateLegacyInstance(excel, currentStage, lineupType);
+        instance.IsPartialChallenge = true;
+        SetPartialBuff(instance, buffId, isFirstHalf);
+
+        ChallengeInstance = instance;
+        await Player.LineupManager!.SetExtraLineup(lineupType);
+
+        var mapEntranceId = isFirstHalf
+            ? excel.MapEntranceID
+            : excel.MapEntranceID2 != 0 ? excel.MapEntranceID2 : excel.MapEntranceID;
+        if (!await TryEnterChallengeScene(mapEntranceId, false))
+        {
+            await Player.LineupManager.SetExtraLineup(ExtraLineupType.LineupNone, false);
+            ChallengeInstance = null;
+            await Player.SendPacket(new PacketStartPartialChallengeScRsp((uint)Retcode.RetChallengeNotExist));
+            return;
+        }
+
+        var groupId = isFirstHalf ? excel.MazeGroupID1 : excel.MazeGroupID2;
+        var subGroupId = isFirstHalf ? excel.MazeGroupID2 : excel.MazeGroupID1;
+
+        if (subGroupId != 0 && subGroupId != groupId)
+            await Player.SceneInstance!.EntityLoader!.UnloadGroup(subGroupId);
+
+        if (groupId != 0)
+            await Player.SceneInstance!.EntityLoader!.LoadGroup(groupId, sendPacket: true);
+
+        await Player.SendPacket(new PacketChallengeLineupNotify(lineupType));
+        await Player.SceneInstance!.SyncLineup();
+
+        instance.SetStartPos(Player.Data.Pos!);
+        instance.SetStartRot(Player.Data.Rot!);
+        instance.SetSavedMp(Player.LineupManager.GetCurLineup()!.Mp);
+
+        InvokeOnPlayerEnterChallenge(Player, instance);
+        await Player.SendPacket(new PacketStartPartialChallengeScRsp(Player));
         SaveInstance(instance);
     }
 
     public void AddHistory(int challengeId, int stars, int score)
     {
         if (stars <= 0) return;
+        if (ChallengeInstance is BaseLegacyChallengeInstance { IsPartialChallenge: true }) return;
         if (!ChallengeData.History.ContainsKey(challengeId))
             ChallengeData.History[challengeId] = new ChallengeHistoryData(Player.Uid, challengeId);
         
@@ -250,6 +251,8 @@ public class ChallengeManager(PlayerInstance player) : BasePlayerManager(player)
 
     public void SaveBattleRecord(BaseLegacyChallengeInstance inst)
     {
+        if (inst.IsPartialChallenge) return;
+
         // 先尝试通过常规 Switch 处理已知类型
         switch (inst)
         {
@@ -417,6 +420,102 @@ public class ChallengeManager(PlayerInstance player) : BasePlayerManager(player)
             stats.StoryGroupStatistics[levelId] = pb;
         }
 
+    }
+
+    private bool PrepareChallengeLineup(ExtraLineupType lineupType)
+    {
+        var lineup = Player.LineupManager!.GetExtraLineup(lineupType);
+        if (lineup == null) return false;
+
+        Player.LineupManager.SanitizeLineup(lineup);
+        var avatars = Player.LineupManager.GetAvatarsFromTeam((int)lineupType + 10);
+        if (avatars.Count == 0) return false;
+
+        foreach (var avatar in avatars)
+        {
+            avatar.AvatarInfo.SetCurHp(10000, true);
+            avatar.AvatarInfo.SetCurSp(5000, true);
+        }
+
+        lineup.Mp = Player.LineupManager.GetMaxMp();
+        return true;
+    }
+
+    private BaseLegacyChallengeInstance CreateLegacyInstance(ChallengeConfigExcel excel, int currentStage,
+        ExtraLineupType lineupType)
+    {
+        var data = new ChallengeDataPb();
+        var currentLineupType = (ChallengeLineupTypePb)lineupType;
+
+        if (excel.IsBoss())
+        {
+            data.Boss = new ChallengeBossDataPb
+            {
+                ChallengeMazeId = (uint)excel.ID,
+                CurStatus = 1,
+                CurrentStage = currentStage,
+                CurrentExtraLineup = currentLineupType
+            };
+            return new ChallengeBossInstance(Player, data);
+        }
+
+        if (excel.IsStory())
+        {
+            data.Story = new ChallengeStoryDataPb
+            {
+                ChallengeMazeId = (uint)excel.ID,
+                CurStatus = 1,
+                CurrentStage = currentStage,
+                CurrentExtraLineup = currentLineupType
+            };
+            return new ChallengeStoryInstance(Player, data);
+        }
+
+        data.Memory = new ChallengeMemoryDataPb
+        {
+            ChallengeMazeId = (uint)excel.ID,
+            CurStatus = 1,
+            CurrentStage = currentStage,
+            CurrentExtraLineup = currentLineupType,
+            RoundsLeft = (uint)excel.ChallengeCountDown
+        };
+        return new ChallengeMemoryInstance(Player, data);
+    }
+
+    private static void SetPartialBuff(BaseLegacyChallengeInstance instance, uint buffId, bool isFirstHalf)
+    {
+        if (buffId == 0) return;
+
+        if (instance.Data.Story != null)
+        {
+            instance.Data.Story.Buffs.Clear();
+            if (!isFirstHalf) instance.Data.Story.Buffs.Add(0);
+            instance.Data.Story.Buffs.Add(buffId);
+            return;
+        }
+
+        if (instance.Data.Boss != null)
+        {
+            instance.Data.Boss.Buffs.Clear();
+            if (!isFirstHalf) instance.Data.Boss.Buffs.Add(0);
+            instance.Data.Boss.Buffs.Add(buffId);
+        }
+    }
+
+    private async ValueTask<bool> TryEnterChallengeScene(int mapEntranceId, bool sendPacket)
+    {
+        if (mapEntranceId <= 0 || !GameData.MapEntranceData.ContainsKey(mapEntranceId))
+            return false;
+
+        try
+        {
+            var changed = await Player.EnterScene(mapEntranceId, 0, sendPacket);
+            return changed || Player.Data.EntryId == mapEntranceId;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     #endregion

@@ -22,6 +22,7 @@ public class LineupManager : BasePlayerManager
         {
             lineupInfo.LineupData = LineupData;
             lineupInfo.AvatarData = player.AvatarManager!.AvatarData;
+            SanitizeLineup(lineupInfo);
         }
     }
 
@@ -119,6 +120,131 @@ public class LineupManager : BasePlayerManager
         return lineupList;
     }
 
+    public bool SanitizeLineup(LineupInfo? lineup, int maxCount = 4)
+    {
+        if (lineup == null) return false;
+
+        lineup.BaseAvatars ??= [];
+        var normalized = new List<LineupAvatarInfo>();
+
+        foreach (var avatar in lineup.BaseAvatars)
+        {
+            var fixedAvatar = NormalizeLineupAvatar(avatar);
+            if (fixedAvatar == null) continue;
+            if (normalized.Any(existing => IsSameLineupAvatar(existing, fixedAvatar))) continue;
+
+            normalized.Add(fixedAvatar);
+            if (normalized.Count >= maxCount) break;
+        }
+
+        var changed = normalized.Count != lineup.BaseAvatars.Count;
+        lineup.BaseAvatars = normalized;
+
+        if (lineup.BaseAvatars.Count == 0)
+        {
+            if (lineup.LeaderAvatarId != 0) changed = true;
+            lineup.LeaderAvatarId = 0;
+            return changed;
+        }
+
+        if (!lineup.BaseAvatars.Any(x => x.BaseAvatarId == lineup.LeaderAvatarId))
+        {
+            lineup.LeaderAvatarId = lineup.BaseAvatars[0].BaseAvatarId;
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    public List<LineupAvatarInfo> BuildValidLineup(IEnumerable<int> avatarIds, int maxCount = 4, bool refreshTrial = false,
+        int? trialWorldLevel = null)
+    {
+        var lineup = new List<LineupAvatarInfo>();
+        foreach (var avatarId in avatarIds)
+        {
+            if (lineup.Count >= maxCount) break;
+
+            var info = BuildLineupAvatarInfo(avatarId, refreshTrial, trialWorldLevel);
+            if (info == null) continue;
+            if (lineup.Any(existing => IsSameLineupAvatar(existing, info))) continue;
+
+            lineup.Add(info);
+        }
+
+        return lineup;
+    }
+
+    private LineupAvatarInfo? NormalizeLineupAvatar(LineupAvatarInfo avatar)
+    {
+        if (avatar.AssistUid > 0)
+        {
+            var assistData = DatabaseHelper.Instance?.GetInstance<AvatarData>(avatar.AssistUid);
+            var assistAvatar = assistData?.FormalAvatars.FirstOrDefault(x => x.BaseAvatarId == avatar.BaseAvatarId);
+            if (assistAvatar == null) return null;
+
+            return new LineupAvatarInfo
+            {
+                BaseAvatarId = assistAvatar.BaseAvatarId,
+                AssistUid = avatar.AssistUid
+            };
+        }
+
+        if (avatar.SpecialAvatarId > 0)
+        {
+            var trial = Player.AvatarManager?.GetTrialAvatar(avatar.SpecialAvatarId);
+            if (trial == null) return null;
+
+            return new LineupAvatarInfo
+            {
+                BaseAvatarId = trial.BaseAvatarId,
+                SpecialAvatarId = trial.SpecialAvatarId
+            };
+        }
+
+        var formal = Player.AvatarManager?.GetFormalAvatar(avatar.BaseAvatarId);
+        if (formal == null) return null;
+
+        return new LineupAvatarInfo
+        {
+            BaseAvatarId = formal.BaseAvatarId
+        };
+    }
+
+    private LineupAvatarInfo? BuildLineupAvatarInfo(int avatarId, bool refreshTrial = false, int? trialWorldLevel = null)
+    {
+        if (avatarId <= 0) return null;
+
+        var trial = Player.AvatarManager?.GetTrialAvatar(avatarId, refreshTrial);
+        if (trial != null)
+        {
+            trial.CheckLevel(trialWorldLevel ?? Player.Data.WorldLevel);
+            return new LineupAvatarInfo
+            {
+                BaseAvatarId = trial.BaseAvatarId,
+                SpecialAvatarId = trial.SpecialAvatarId
+            };
+        }
+
+        var formal = Player.AvatarManager?.GetFormalAvatar(avatarId);
+        if (formal == null) return null;
+
+        return new LineupAvatarInfo
+        {
+            BaseAvatarId = formal.BaseAvatarId
+        };
+    }
+
+    private static bool IsSameLineupAvatar(LineupAvatarInfo left, LineupAvatarInfo right)
+    {
+        if (left.AssistUid > 0 || right.AssistUid > 0)
+            return left.AssistUid == right.AssistUid && left.BaseAvatarId == right.BaseAvatarId;
+
+        if (left.SpecialAvatarId > 0 || right.SpecialAvatarId > 0)
+            return left.SpecialAvatarId == right.SpecialAvatarId && left.SpecialAvatarId != 0;
+
+        return left.BaseAvatarId == right.BaseAvatarId;
+    }
+
     #endregion
 
     #region Management
@@ -160,27 +286,9 @@ public class LineupManager : BasePlayerManager
             AvatarData = Player.AvatarManager!.AvatarData
         };
 
-        var worldLevel = type == ExtraLineupType.LineupStageTrial ? 0 : Player.Data.WorldLevel;
-
-        foreach (var avatarId in baseAvatarIds)
-        {
-            var trial = Player.AvatarManager!.GetTrialAvatar(avatarId, refresh);
-            if (trial != null)
-            {
-                if (GameData.MultiplePathAvatarConfigData.TryGetValue(trial.AvatarId, out var pathExcel) &&
-                    pathExcel.Gender != GenderTypeEnum.GENDER_NONE)
-                    if (pathExcel.Gender != (GenderTypeEnum)Player.Data.CurrentGender)
-                        continue;
-
-                trial.CheckLevel(worldLevel);
-                lineup.BaseAvatars!.Add(new LineupAvatarInfo
-                    { BaseAvatarId = trial.BaseAvatarId, SpecialAvatarId = trial.SpecialAvatarId });
-            }
-            else
-            {
-                lineup.BaseAvatars!.Add(new LineupAvatarInfo { BaseAvatarId = avatarId });
-            }
-        }
+        int? trialWorldLevel = type == ExtraLineupType.LineupStageTrial ? 0 : null;
+        lineup.BaseAvatars = BuildValidLineup(baseAvatarIds, refreshTrial: refresh, trialWorldLevel: trialWorldLevel);
+        SanitizeLineup(lineup);
 
         LineupData.Lineups.Add(index, lineup);
         LineupData.CurExtraLineup = index;
@@ -200,7 +308,10 @@ public class LineupManager : BasePlayerManager
 
         // get cur extra lineup
         var lineup = GetExtraLineup(type);
-        if (lineup == null || lineup.BaseAvatars?.Count == 0) return;
+        if (lineup == null) return;
+
+        SanitizeLineup(lineup);
+        if (lineup.BaseAvatars?.Count == 0) return;
 
         LineupData.CurExtraLineup = index;
 
@@ -211,31 +322,19 @@ public class LineupManager : BasePlayerManager
     public async ValueTask AddAvatar(int lineupIndex, int avatarId, bool sendPacket = true)
     {
         if (lineupIndex < 0) return;
+        var lineupAvatar = BuildLineupAvatarInfo(avatarId);
+        if (lineupAvatar == null) return;
         LineupData.Lineups.TryGetValue(lineupIndex, out var lineup);
 
         if (lineup == null)
         {
-            var baseAvatarId = avatarId;
-            var specialAvatarId = avatarId * 10 + 0;
-            GameData.SpecialAvatarData.TryGetValue(specialAvatarId, out var specialAvatar);
-            if (specialAvatar != null)
-            {
-                Player.AvatarManager!.GetTrialAvatar(avatarId)?.CheckLevel(Player.Data.WorldLevel);
-                baseAvatarId = specialAvatar.AvatarID;
-            }
-            else
-            {
-                if (baseAvatarId > 8000) baseAvatarId = 8001;
-            }
-
             lineup = new LineupInfo
             {
                 Name = "",
                 LineupType = 0,
                 BaseAvatars =
                 [
-                    new LineupAvatarInfo
-                        { BaseAvatarId = baseAvatarId, SpecialAvatarId = specialAvatar?.SpecialAvatarID ?? 0 }
+                    lineupAvatar
                 ],
                 LineupData = LineupData,
                 AvatarData = Player.AvatarManager!.AvatarData
@@ -245,24 +344,12 @@ public class LineupManager : BasePlayerManager
         else
         {
             if (lineup.BaseAvatars!.Count >= 4) return;
-
-            var baseAvatarId = avatarId;
-            var specialAvatarId = avatarId * 10 + 0;
-            GameData.SpecialAvatarData.TryGetValue(specialAvatarId, out var specialAvatar);
-            if (specialAvatar != null)
-            {
-                Player.AvatarManager!.GetTrialAvatar(avatarId)?.CheckLevel(Player.Data.WorldLevel);
-                baseAvatarId = specialAvatar.AvatarID;
-            }
-            else
-            {
-                if (baseAvatarId > 8000) baseAvatarId = 8001;
-            }
-
-            lineup.BaseAvatars?.Add(new LineupAvatarInfo
-                { BaseAvatarId = baseAvatarId, SpecialAvatarId = specialAvatar?.SpecialAvatarID ?? 0 });
+            if (lineup.BaseAvatars.Any(existing => IsSameLineupAvatar(existing, lineupAvatar))) return;
+            lineup.BaseAvatars?.Add(lineupAvatar);
             LineupData.Lineups[lineupIndex] = lineup;
         }
+
+        SanitizeLineup(lineup);
 
         if (sendPacket)
         {
@@ -356,9 +443,9 @@ public class LineupManager : BasePlayerManager
             return;
         else
             lineup = dataLineup;
-        lineup.BaseAvatars = [];
+        lineup.BaseAvatars = BuildValidLineup(lineupSlotList);
+        SanitizeLineup(lineup);
         var index = lineup.LineupType == 0 ? lineupIndex : LineupData.GetCurLineupIndex();
-        foreach (var avatar in lineupSlotList) await AddAvatar(index, avatar, false);
 
         if (index == LineupData.GetCurLineupIndex()) Player.SceneInstance?.SyncLineup();
         InvokeOnPlayerSyncLineup(Player, lineup);
@@ -380,9 +467,9 @@ public class LineupManager : BasePlayerManager
             return;
         else
             lineup = LineupData.Lineups[(int)req.Index];
-        lineup.BaseAvatars = [];
+        lineup.BaseAvatars = BuildValidLineup(req.LineupSlotList.Select(x => (int)x.Id));
+        SanitizeLineup(lineup);
         var index = lineup.LineupType == 0 ? (int)req.Index : LineupData.GetCurLineupIndex();
-        foreach (var avatar in req.LineupSlotList) await AddAvatar(index, (int)avatar.Id, false);
 
         if (index == LineupData.GetCurLineupIndex()) Player.SceneInstance?.SyncLineup();
         InvokeOnPlayerSyncLineup(Player, lineup);

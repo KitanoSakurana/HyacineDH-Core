@@ -88,6 +88,7 @@ public static class GameData
     public static Dictionary<int, ChallengeConfigExcel> ChallengeConfigData { get; private set; } = [];
     public static Dictionary<int, ChallengeTargetExcel> ChallengeTargetData { get; private set; } = [];
     public static Dictionary<int, ChallengeGroupExcel> ChallengeGroupData { get; private set; } = [];
+    public static ChallengePeakOverrideConfig ChallengePeakOverrideConfig { get; set; } = new();
 
     public static Dictionary<int, ChallengePeakGroupConfigExcel> ChallengePeakGroupConfigData { get; private set; } =
         [];

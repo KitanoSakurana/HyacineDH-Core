@@ -16,7 +16,13 @@ public class HandlerEnterChallengeNextPhaseCsReq : Handler
             return;
         }
 
-        await boss.NextPhase();
+        var ok = await boss.NextPhase();
+        if (!ok)
+        {
+            await connection.SendPacket(new PacketEnterChallengeNextPhaseScRsp(Retcode.RetChallengeNotDoing));
+            return;
+        }
+
         await connection.SendPacket(new PacketEnterChallengeNextPhaseScRsp(connection.Player));
     }
 }
