@@ -1,0 +1,26 @@
+﻿using HyacineCore.Server.Data;
+using HyacineCore.Server.Kcp;
+using HyacineCore.Server.Proto;
+
+namespace HyacineCore.Server.GameServer.Server.Packet.Send.Scene;
+
+public class PacketGetUnlockTeleportScRsp : BasePacket
+{
+    public PacketGetUnlockTeleportScRsp(GetUnlockTeleportCsReq req) : base(CmdIds.GetUnlockTeleportScRsp)
+    {
+        var rsp = new GetUnlockTeleportScRsp();
+        foreach (var entranceId in req.EntryIdList)
+        {
+            GameData.MapEntranceData.TryGetValue((int)entranceId, out var excel);
+            if (excel == null) continue;
+
+            GameData.GetFloorInfo(excel.PlaneID, excel.FloorID, out var floorInfo);
+            if (floorInfo == null) continue;
+
+            foreach (var teleport in floorInfo.CachedTeleports)
+                rsp.UnlockTeleportList.Add((uint)teleport.Value.MappingInfoID);
+        }
+
+        SetData(rsp);
+    }
+}

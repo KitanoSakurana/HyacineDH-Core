@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>HyacineCore.Server.Common</RootNamespace>
+    <AssemblyName>Common</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="3.33.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="Spectre.Console" Version="0.54.0" />
+    <PackageReference Include="SqlSugarCore" Version="5.1.4.210" />
+    <PackageReference Include="SQLitePCLRaw.core" Version="3.0.2" />
+    <PackageReference Include="SQLitePCLRaw.provider.e_sqlite3" Version="3.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Proto\Proto.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Data\Excel\ActionPointOverdrawExcel.cs" />
+    <Compile Remove="Data\Excel\BattleEventDataExcel.cs" />
+    <Compile Remove="Data\Excel\DialogueDynamicContentExcel.cs" />
+    <Compile Remove="Data\Excel\DialogueEventExcel.cs" />
+  </ItemGroup>
+</Project>

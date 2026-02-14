@@ -1,0 +1,43 @@
+using HyacineCore.Server.Proto;
+using SqlSugar;
+
+namespace HyacineCore.Server.Database.Quests;
+
+[SugarTable("daily_active_data")]
+public class DailyActiveData : BaseDatabaseDataHelper
+{
+    // Uid 已经由基类 BaseDatabaseDataHelper 提供，并自动作为主键
+    
+    // 修改这里：存 Unix 时间戳（秒），方便直接传给 UtilTools
+    public long LastRefreshTime { get; set; } = 0;
+
+    // 当前活跃度总分 (0-500)
+    public uint DailyActivePoint { get; set; } = 0;
+
+    // 已领取的奖励档位列表 [100, 200, 300, 400, 500]
+    [SugarColumn(IsJson = true)]
+    public List<uint> TakenRewardList { get; set; } = [];
+
+    // 今日随机出的 5 个任务条目
+    // Key: QuestId (子任务ID), Value: 进度信息
+    [SugarColumn(IsJson = true, ColumnDataType = "MEDIUMTEXT")]
+    public Dictionary<uint, DailyQuestInfo> TodayQuests { get; set; } = [];
+}
+
+public class DailyQuestInfo
+{
+    public uint QuestId { get; set; }
+    public uint Progress { get; set; }
+    public bool IsFinished { get; set; }
+
+    public DailyActivityInfo ToProto(uint worldLevel)
+    {
+        return new DailyActivityInfo
+        {
+            Level = Progress,
+            DailyActivePoint = 0,
+            IsHasTaken = IsFinished,
+            WorldLevel = worldLevel
+        };
+    }
+}

@@ -1,0 +1,33 @@
+{
+  "Region": "None",
+  "HotfixData": {
+    "CN3.8.5X": {
+      "AssetBundleUrl": "",
+      "ExAssetBundleUrl": "",
+      "ExResourceUrl": "",
+      "LuaUrl": "",
+      "IfixUrl": ""
+    },
+    "OS3.8.5X": {
+      "AssetBundleUrl": "",
+      "ExAssetBundleUrl": "",
+      "ExResourceUrl": "",
+      "LuaUrl": "",
+      "IfixUrl": ""
+    },
+    "CN4.0.0": {
+      "AssetBundleUrl": "",
+      "ExAssetBundleUrl": "",
+      "ExResourceUrl": "",
+      "LuaUrl": "",
+      "IfixUrl": ""
+    },
+    "OS4.0.0": {
+      "AssetBundleUrl": "",
+      "ExAssetBundleUrl": "",
+      "ExResourceUrl": "",
+      "LuaUrl": "",
+      "IfixUrl": ""
+    }
+  }
+}

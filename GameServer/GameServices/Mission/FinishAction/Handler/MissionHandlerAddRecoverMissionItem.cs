@@ -1,0 +1,20 @@
+﻿using HyacineCore.Server.Enums.Mission;
+using HyacineCore.Server.GameServer.Game.Player;
+
+namespace HyacineCore.Server.GameServer.Game.Mission.FinishAction.Handler;
+
+[MissionFinishAction(FinishActionTypeEnum.addRecoverMissionItem)]
+public class MissionHandlerAddRecoverMissionItem : MissionFinishActionHandler
+{
+    public override async ValueTask OnHandle(List<int> @params, List<string> paramString, PlayerInstance player)
+    {
+        if (@params.Count < 2) return;
+
+        for (var i = 0; i < @params.Count; i += 2)
+        {
+            var itemId = @params[i];
+            var count = @params[i + 1];
+            await player.InventoryManager!.AddItem(itemId, count);
+        }
+    }
+}
