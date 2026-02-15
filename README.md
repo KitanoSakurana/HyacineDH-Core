@@ -2,6 +2,8 @@
 
 **__项目开发中__**
 
+[EN](Docs/README_en-US.md) | [繁中](Docs/README_zh-CN.md) | [JP](Docs/README_ja-JP.md)
+
 ## 📖介绍
 特征：支持游戏的4.0版本
 加入我们的聊天群组：[Discord](https://discord.gg/castoriceps)
@@ -9,13 +11,13 @@
 ## 📦快速开始
 要求：.NET 9.0 [点击下载](https://dotnet.microsoft.com/en-us/download/dotnet/9.0)
 ```bash
-git clone https://github.com/Castorice/HyacineDH-Core.git
+git clone https://github.com/DBKAHHK/HyacineDH-Core.git
 cd HyacineDH-Core
 dotnet run
 ```
 
 ## 📝使用说明
-如果你不想从源代码编译，请使用 [Releases](https://github.com/Castorice/HyacineDH-Core/releases) 下载预编译的文件。
+如果你不想从源代码编译，请使用 [Releases](https://github.com/DBKAHHK/HyacineDH-Core/releases) 下载预编译的文件。
 
 ## 💡功能
 
