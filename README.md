@@ -1,9 +1,21 @@
 # HyacineDH-Core
 
-**__Discord.gg/CastoricePS__**
+**__项目开发中__**
 
 ## 📖介绍
 特征：支持游戏的4.0版本
+加入我们的聊天群组：[Discord](https://discord.gg/castoriceps)
+
+## 📦快速开始
+要求：.NET 9.0 [点击下载](https://dotnet.microsoft.com/en-us/download/dotnet/9.0)
+```bash
+git clone https://github.com/Castorice/HyacineDH-Core.git
+cd HyacineDH-Core
+dotnet run
+```
+
+## 📝使用说明
+如果你不想从源代码编译，请使用 [Releases](https://github.com/Castorice/HyacineDH-Core/releases) 下载预编译的文件。
 
 ## 💡功能
 
