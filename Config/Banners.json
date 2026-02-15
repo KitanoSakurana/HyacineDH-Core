@@ -2203,7 +2203,21 @@
    ]
   },
   {
-    "gachaId": 2100,
+    "gachaId": 2105,
+    "gachaType": "AvatarUp",
+    "beginTime": 0,
+    "endTime": 2051226000,
+    "rateUpItems5": [
+      1502
+    ],
+    "rateUpItems4": [
+        1106,
+        1201,
+        1215
+    ]
+  },
+  {
+    "gachaId": 2109,
     "gachaType": "AvatarUp",
     "beginTime": 0,
     "endTime": 2051226000,
@@ -2211,9 +2225,9 @@
       1501
     ],
     "rateUpItems4": [
-      1106,
-      1110,
-      1223
+        1106,
+        1201,
+        1215
     ]
   }
 ]

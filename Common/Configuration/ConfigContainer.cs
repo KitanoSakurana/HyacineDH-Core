@@ -77,6 +77,7 @@ public class ServerOption
     public int StartTrailblazerLevel { get; set; } = 1;
     public bool AutoUpgradeWorldLevel { get; set; } = true;
     public bool EnableMission { get; set; } = true; // experimental
+    public bool EnableMessage { get; set; } = true; // works independently from mission
     public bool EnableQuest { get; set; } = true; // experimental
     public bool AutoLightSection { get; set; } = true;
     public string Language { get; set; } = "EN";

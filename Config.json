@@ -39,6 +39,7 @@
     "StartTrailblazerLevel": 1,
     "AutoUpgradeWorldLevel": true,
     "EnableMission": false,
+    "EnableMessage": true,
     "EnableQuest": true,
     "AutoLightSection": true,
     "Language": "CHS",
